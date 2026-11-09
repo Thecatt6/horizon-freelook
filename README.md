@@ -82,3 +82,39 @@ helpers.
 ```sh
 python3 tools/check_compat.py --horizon ../horizon
 ```
+
+## Making the `.hnmod`
+
+A `.hnmod` is the zip the launcher installs: `horizon-native.json` at the root
+(schema 1, the mod id and version, the game version, the exact Horizon and
+horizon-mixins commits) and the bundle's sources under `mixins/<id>/` — only
+`.rs`, `.toml`, `data/` files and a crate's README/LICENSE. It is the same zip
+`horizon_launcher::github_mods::pack` writes from a folder, built here without
+compiling the launcher:
+
+```sh
+python3 tools/pack_hnmod.py              # ./freelook-0.4.0.hnmod + its SHA-256
+python3 tools/pack_hnmod.py --out dist   # somewhere else
+python3 tools/pack_hnmod.py --check dist/freelook-0.4.0.hnmod   # read it as the launcher does
+```
+
+The manifest is made from the bundle itself, so bumping `[mod] version` in
+`horizon-mixin.toml` is enough; the packer refuses a bundle without
+`[compatibility] horizon_revision`.
+
+### Installing it
+
+- **In the launcher**, the file installs a mod the launcher then builds: the
+  Mods page (**Open folder** opens `<instance>/horizon-native-mods/`) is where
+  a `.hnmod` goes, then build with `horizon-launcher native-build --instance
+  NAME --trust-native-code` (or `native-build` with no folder, which builds the
+  installed native mods that are turned on).
+- **By hand**, drop it in `<instance>/horizon-native-mods/freelook.hnmod` and
+  add `mod.freelook:true` to `<instance>/horizon-mods.txt` (or turn it on in
+  Options > Mods): that is what the launcher does when it installs one.
+- **Building a folder directly** works too and skips the file entirely:
+  `horizon-launcher native-build mixins --instance NAME --trust-native-code`.
+
+The mod is built on the Horizon commit it pins (`fdc87ae`), so the instance
+needs a version whose source that commit is, or the launcher asks before
+building on the newest pinned commit anyway (`--allow-version-mismatch`).
