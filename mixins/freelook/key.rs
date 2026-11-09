@@ -1,5 +1,6 @@
-// The freelook key went down or up: third person while it is held, then back
-// to the camera the player had.
+// The freelook key went down or up: third person while it is held (the same
+// camera F5 gives, which the camera hook then looks around from), then back to
+// the camera the player had.
 fn freelook_key(game: &mut crate::game::Game<'_>, key: &str, pressed: bool) {
     use crate::game::freelook as m;
     use crate::game::perspective::CameraType;

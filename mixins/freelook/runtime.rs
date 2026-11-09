@@ -7,12 +7,14 @@
 use std::cell::Cell;
 
 pub const ID: &str = "freelook";
-pub const VERSION: &str = "0.3.1";
+pub const VERSION: &str = "0.4.0";
 pub const DESCRIPTION: &str = "Hold a key for a third person view you can look around in while your character keeps facing the same way; the wheel changes the camera distance.";
 /// The key's name, and its default.
 pub const KEY: &str = "freelook";
 pub const DEFAULT_KEY: &str = "key.keyboard.x";
-/// The farthest and the closest the wheel moves the camera, in blocks.
+/// The distance the camera starts at (the game's own), and the farthest and
+/// the closest the wheel moves it, in blocks.
+pub const DEFAULT_OUT: f32 = 4.0;
 pub const MAX_OUT: f32 = 24.0;
 pub const MIN_OUT: f32 = 1.0;
 
@@ -24,7 +26,8 @@ struct State {
     look: Option<(f32, f32)>,
     /// One of our hooks is calling the game's own function again.
     busy: bool,
-    /// Camera distance in blocks, set with the wheel (the game's own is 4).
+    /// Camera distance in blocks, set with the wheel (the game's own is 4);
+    /// each time freelook starts it starts from there again.
     out: f32,
     /// The camera type before the key went down: 0 first person, 1 third
     /// person behind, 2 in front.
@@ -33,7 +36,7 @@ struct State {
 
 thread_local! {
     static STATE: Cell<State> = const {
-        Cell::new(State { held: false, look: None, busy: false, out: 4.0, before: 0 })
+        Cell::new(State { held: false, look: None, busy: false, out: DEFAULT_OUT, before: 0 })
     };
 }
 
@@ -56,6 +59,7 @@ pub fn key(playing: bool, pressed: bool) -> Option<bool> {
         }
         s.held = pressed;
         s.look = None;
+        s.out = DEFAULT_OUT;
         change = Some(pressed);
     });
     change
@@ -80,23 +84,18 @@ pub fn wheel(steps: f32) -> bool {
     let mut held = false;
     update(|s| {
         held = s.held;
-        if held {
+        if held && steps.is_finite() {
             s.out = (s.out - steps).clamp(MIN_OUT, MAX_OUT);
         }
     });
     held
 }
 
-/// The camera's distance in blocks while freelook is on.
+/// The camera's distance in blocks while freelook is on: what the game's
+/// third person camera is told to use, before it is pulled in by a wall.
 pub fn distance() -> Option<f32> {
     let s = STATE.with(|s| s.get());
     s.held.then_some(s.out)
-}
-
-/// The distance to use: `wanted`, or the game's own shorter `clipped`
-/// when a wall is in the way (a camera that is not pulled in is 4 away).
-pub fn length(wanted: f32, clipped: f32) -> f32 {
-    if clipped < 3.99 { wanted.min(clipped) } else { wanted }
 }
 
 /// Starts a hooked call; false when one is already running (the game's own
@@ -160,10 +159,12 @@ mod tests {
         assert_eq!(distance(), Some(MIN_OUT));
         assert!(wheel(-100.0));
         assert_eq!(distance(), Some(MAX_OUT));
+        assert!(wheel(f32::NAN));
+        assert_eq!(distance(), Some(MAX_OUT), "a broken step changes nothing");
         key(true, false);
         assert_eq!(distance(), None);
-        assert_eq!(length(10.0, 4.0), 10.0);
-        assert_eq!(length(10.0, 1.5), 1.5);
+        key(true, true);
+        assert_eq!(distance(), Some(DEFAULT_OUT), "the next hold starts over");
     }
 
     #[test]

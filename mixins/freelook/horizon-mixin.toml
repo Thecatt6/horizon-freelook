@@ -1,11 +1,15 @@
 [mod]
 id = "freelook"
-version = "0.3.1"
+version = "0.4.0"
 priority = 100
 
-# Hooks two of the game's own functions, so it builds only on this commit.
+# Pinned to Nightly 2026-11-08 (fdc87ae). The key, wheel, mods list and
+# distance are the game's named hook points from native-hooks.json, so a move
+# of those functions does not break the mod; the view and the turn are private
+# methods ("perspective.rs", the rest of `game.rs` in older builds), which only
+# this exact source has.
 [compatibility]
-horizon_revision = "a4911819616385e3e8296b8957e7f60e8a217949"
+horizon_revision = "fdc87aecdbd116bf1e08adcd062fcbaea8c2e2ca"
 
 [[module]]
 id = "runtime"
@@ -13,10 +17,12 @@ file = "crates/horizon-client/src/game.rs"
 name = "freelook"
 source = "runtime.rs"
 
+# The freelook key goes down or up (Options > Mods lists it with its default).
 [[injection]]
 id = "key"
+hook = "key"
+hook_version = 1
 kind = "HEAD"
-target = "horizon_client::game::native_hooks::Game<'_>::native_key"
 helper = "key.rs"
 bindings = [
   { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
@@ -24,10 +30,12 @@ bindings = [
   { name = "pressed", ty = "bool", value = "pressed" },
 ]
 
+# While it is held, the wheel changes the camera's distance, not the hotbar.
 [[injection]]
 id = "wheel"
+hook = "wheel"
+hook_version = 1
 kind = "HEAD"
-target = "horizon_client::game::native_hooks::Game<'_>::native_wheel"
 helper = "wheel.rs"
 bindings = [
   { name = "game", ty = "&crate::game::Game<'_>", value = "&*self" },
@@ -35,25 +43,30 @@ bindings = [
   { name = "claimed", ty = "&mut bool", value = "&mut *claimed" },
 ]
 
+# Freelook's row in Options > Mods.
 [[injection]]
 id = "list"
+hook = "mods"
+hook_version = 1
 kind = "HEAD"
-target = "horizon_client::game::native_hooks::Game<'_>::native_mods"
 helper = "list.rs"
 bindings = [
-  { name = "mods", ty = "&mut Vec<crate::game::native_hooks::NativeMod>", value = "&mut *mods" },
+  { name = "mods", ty = "&mut Vec<crate::mod_api::NativeMod>", value = "&mut *mods" },
 ]
 
+# The distance the held camera asks for, before a wall pulls it in.
 [[injection]]
-id = "mouse"
+id = "distance"
+hook = "camera_distance"
+hook_version = 1
 kind = "HEAD"
-cancellable = true
-target = "horizon_client::game::Game<'_>::apply_mouse_look"
-helper = "mouse.rs"
+helper = "distance.rs"
 bindings = [
-  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "game", ty = "&crate::game::Game<'_>", value = "&*self" },
+  { name = "distance", ty = "&mut f32", value = "&mut *distance" },
 ]
 
+# The view: third person, looked around from the camera's angles while held.
 [[injection]]
 id = "camera"
 kind = "HEAD"
@@ -63,4 +76,17 @@ helper = "camera.rs"
 bindings = [
   { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
   { name = "partial", ty = "f32", value = "partial" },
+]
+
+# The mouse turns the camera's angles, not the player's, while held.
+[[injection]]
+id = "turn"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client::game::perspective::Game<'_>::turn_player"
+helper = "turn.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "xo", ty = "f64", value = "xo" },
+  { name = "yo", ty = "f64", value = "yo" },
 ]
